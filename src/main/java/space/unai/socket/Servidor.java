@@ -16,10 +16,11 @@ public class Servidor {
 
 class Server extends Thread {
     private ServerSocket ssk;
-    private File file;
+    private File file, file_passed;
 
     public Server() {
         this.file = new File("registry.txt"); // Archivo donde se registra la información de los vehículos
+        this.file_passed = new File("passed_cars.txt");
     }
 
     @Override
@@ -56,6 +57,24 @@ class Server extends Thread {
         }
     }
 
+    public HashMap<String, Long> registryToHashMap() {
+        HashMap<String, Long> hashMap = new HashMap<>();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(";");
+                for (int i = 0; i < parts.length; i++) {
+                    System.out.println(parts[i]);
+                }
+                hashMap.put(parts[1], Long.valueOf(parts[2]));
+            }
+        } catch (IOException ex) {
+            System.out.println("[!] ERROR: " + ex.getMessage());
+        }
+        return hashMap;
+    }
+
     private void readDataOfRegistry(HashMap<String, Long> data) {
         for (Map.Entry<String, Long> entry : data.entrySet()) {
             String licensePlate = entry.getKey(); // Matrícula del vehículo
@@ -80,9 +99,10 @@ class Server extends Thread {
 
             if (found) {
                 // El vehículo ya ha pasado, se escribe en passed_cars.txt
-                try (BufferedWriter passedCarsWriter = new BufferedWriter(new FileWriter("passed_cars.txt", true))) {
-                    long totalTime = System.currentTimeMillis() - entryTime;
-                    passedCarsWriter.write(licensePlate + ":" + totalTime);
+                try (BufferedWriter passedCarsWriter = new BufferedWriter(new FileWriter(file_passed, true))) {
+                    HashMap<String, Long> hm = registryToHashMap();
+                    long totalTime = System.currentTimeMillis() - hm.get(licensePlate);
+                    passedCarsWriter.write(licensePlate + ";" + totalTime);
                     passedCarsWriter.newLine();
                     passedCarsWriter.flush();
                 } catch (IOException e) {
@@ -94,7 +114,7 @@ class Server extends Thread {
                     try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, true))) {
                         int n = 0;
                         n++;  // Incrementa el contador
-                        writer.write(n + ";" + licensePlate + ";" + (System.currentTimeMillis() - entryTime));
+                        writer.write(n + ";" + licensePlate + ";" + (entryTime));
                         writer.newLine();
                         writer.flush();
                     } catch (IOException e) {
