@@ -8,53 +8,66 @@ import java.util.Map;
 
 public class Servidor {
 
+    private static ServerSocket ssk;
+
+    public Servidor() {
+    }
+
     public static void main(String[] args) {
-        Server radar = new Server();
-        radar.start();
-    }
-}
-
-class Server extends Thread {
-    private ServerSocket ssk;
-    private File file, file_passed;
-
-    public Server() {
-        this.file = new File("registry.txt"); // Archivo donde se registra la información de los vehículos
-        this.file_passed = new File("passed_cars.txt");
-    }
-
-    @Override
-    public void run() {
         System.out.println("[!] Servidor RADAR en funcionamiento.");
         try {
             ssk = new ServerSocket(9000); // Socket del servidor en el puerto 9000
 
             while (true) {
                 Socket sk = ssk.accept(); // Espera a que un cliente se conecte
-                handleClient(sk); // Procesa los datos del cliente conectado
+                Server sv = new Server(sk); // Procesa los datos del cliente conectado
+
+                sv.handleClient(sk).start();
+
             }
         } catch (IOException e) {
             System.out.println("[!] ERROR: " + e.getMessage());
             e.printStackTrace();
         }
     }
+}
 
-    private synchronized void handleClient(Socket sk) {
-        try (DataInputStream in = new DataInputStream(sk.getInputStream())) {
-            int SIZE = in.readInt(); // Lee el tamaño de los datos recibidos
-            HashMap<String, Long> data = new HashMap<>(); // Almacena la matrícula y el tiempo de cada vehículo
+class Server {
 
-            for (int i = 0; i < SIZE; i++) {
-                String key = in.readUTF(); // Lee la matrícula del vehículo
-                long value = in.readLong(); // Lee el tiempo del vehículo
-                data.put(key, value); // Almacena la matrícula y el tiempo en el HashMap
+    private File file, file_passed;
+
+    private final Object sync;
+
+    private Socket sk;
+
+    public Server(Socket sk) {
+        this.file = new File("registry.txt"); // Archivo donde se registra la información de los vehículos
+        this.file_passed = new File("passed_cars.txt");
+
+        this.sk = sk;
+        this.sync = new Object();
+    }
+
+    public Thread handleClient(Socket sk) {
+        return new Thread(() -> {
+            try (DataInputStream in = new DataInputStream(sk.getInputStream())) {
+                int SIZE = in.readInt(); // Lee el tamaño de los datos recibidos
+                HashMap<String, Long> data = new HashMap<>(); // Almacena la matrícula y el tiempo de cada vehículo
+
+                synchronized (sync) {
+                    for (int i = 0; i < SIZE; i++) {
+                        String key = in.readUTF(); // Lee la matrícula del vehículo
+                        long value = in.readLong(); // Lee el tiempo del vehículo
+                        data.put(key, value); // Almacena la matrícula y el tiempo en el HashMap
+                    }
+                }
+
+                readDataOfRegistry(data); // Procesa los datos del vehículo
+                System.out.println("[!] La infracción ha sido registrada!");
+            } catch (IOException e) {
+                System.out.println("[!] ERROR: " + e.getMessage());
             }
-
-            readDataOfRegistry(data); // Procesa los datos del vehículo
-            System.out.println("[!] La infracción ha sido registrada!");
-        } catch (IOException e) {
-            System.out.println("[!] ERROR: " + e.getMessage());
-        }
+        });
     }
 
     public HashMap<String, Long> registryToHashMap() {
